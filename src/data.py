@@ -85,7 +85,6 @@ def make_loaders(cfg: SimpleNamespace) -> Tuple[DataLoader, DataLoader]:
 if __name__ == "__main__":
     import argparse
     import yaml
-    from types import SimpleNamespace
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
