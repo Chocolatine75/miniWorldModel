@@ -1,7 +1,7 @@
 """Gymnasium environment helpers: creation, seeding, observation extraction."""
 
 import random
-from typing import Union, Optional
+from typing import Optional
 import numpy as np
 import torch
 import gymnasium as gym
