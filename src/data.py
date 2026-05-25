@@ -1,6 +1,7 @@
 """Rollout collection and PyTorch Dataset for (obs, action, next_obs) transitions."""
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import List, Dict, Tuple
 
 import torch
@@ -9,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from src.env import make_env, get_obs, set_seed
 
 
-def collect_random_rollouts(cfg) -> None:
+def collect_random_rollouts(cfg: SimpleNamespace) -> None:
     """Collect random-policy transitions and save to data/rollouts.pt.
 
     cfg: SimpleNamespace with fields: env_id, seed, n_episodes
@@ -42,8 +43,8 @@ def collect_random_rollouts(cfg) -> None:
             print(f"  Collected episode {ep + 1}/{cfg.n_episodes} "
                   f"| total transitions: {len(all_transitions)}")
 
-    torch.save(all_transitions, "data/rollouts.pt")
-    print(f"Saved {len(all_transitions)} transitions → data/rollouts.pt")
+    torch.save(all_transitions, cfg.data_path)
+    print(f"Saved {len(all_transitions)} transitions → {cfg.data_path}")
 
 
 class RolloutDataset(Dataset):
@@ -54,7 +55,7 @@ class RolloutDataset(Dataset):
     """
 
     def __init__(self, path: str):
-        self.data: List[Dict[str, torch.Tensor]] = torch.load(path)
+        self.data: List[Dict[str, torch.Tensor]] = torch.load(path, weights_only=False)
 
     def __len__(self) -> int:
         return len(self.data)
@@ -65,13 +66,13 @@ class RolloutDataset(Dataset):
         return item["obs"], item["action"], item["next_obs"]
 
 
-def make_loaders(cfg) -> Tuple[DataLoader, DataLoader]:
+def make_loaders(cfg: SimpleNamespace) -> Tuple[DataLoader, DataLoader]:
     """Load rollouts.pt and return (train_loader, val_loader).
 
     cfg: SimpleNamespace with fields: batch_size
     90% train / 10% val split by random shuffle.
     """
-    dataset = RolloutDataset("data/rollouts.pt")
+    dataset = RolloutDataset(cfg.data_path)
     n_val   = max(1, int(0.1 * len(dataset)))
     n_train = len(dataset) - n_val
     train_ds, val_ds = random_split(dataset, [n_train, n_val])
@@ -91,6 +92,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with open(args.config) as f:
-        cfg = SimpleNamespace(**yaml.safe_load(f))
+        cfg_dict = yaml.safe_load(f)
+    cfg = SimpleNamespace(**cfg_dict)
 
     collect_random_rollouts(cfg)

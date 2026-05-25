@@ -12,6 +12,7 @@ hidden_dim: 128
 
 # Data collection
 n_episodes: 500
+data_path: "data/rollouts.pt"
 
 # Training
 batch_size: 256
