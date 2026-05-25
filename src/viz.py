@@ -66,9 +66,9 @@ def make_comparison_gif(
     combined_frames: List[Image.Image] = []
 
     for i in range(n_frames):
-        # Clamp indices so the last frame is repeated when one sequence is shorter.
-        idx_r = min(i, len(frames_random) - 1)
-        idx_c = min(i, len(frames_cem) - 1)
+        # Loop the shorter episode so both sides always animate.
+        idx_r = i % len(frames_random)
+        idx_c = i % len(frames_cem)
 
         pil_r = _resize_to_height(_to_pil(frames_random[idx_r]), panel_h)
         pil_c = _resize_to_height(_to_pil(frames_cem[idx_c]),    panel_h)
