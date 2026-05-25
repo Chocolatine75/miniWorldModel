@@ -1,0 +1,33 @@
+# config.yaml — ALL hyperparameters live here. Never hardcode values in src/.
+
+# Environment
+env_id: "CartPole-v1"   # Switch to "MiniGrid-Empty-8x8-v0" for stretch goal
+seed: 42
+obs_dim: 4              # CartPole obs dim; ignored for MiniGrid (inferred from image)
+n_actions: 2            # CartPole: 2 | MiniGrid-Empty-8x8: 7
+
+# Model
+emb_dim: 32
+hidden_dim: 128
+
+# Data collection
+n_episodes: 500
+
+# Training
+batch_size: 256
+n_epochs: 20
+lr: 0.001
+checkpoint_every: 1     # Save checkpoint every N epochs
+
+# Loss weights (VICReg + IDM)
+alpha: 1.0   # var_loss weight
+beta: 1.0    # cov_loss weight
+gamma: 1.0   # idm_loss weight
+
+# Planner
+plan_method: "cem"   # "cem" or "mppi"
+N: 512               # Number of candidate action sequences
+H: 15                # Planning horizon (timesteps)
+K: 64                # Number of elite sequences kept each iteration
+n_iter: 5            # CEM/MPPI refinement iterations
+mppi_lambda: 10.0    # MPPI softmax temperature
