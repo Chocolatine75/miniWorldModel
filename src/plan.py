@@ -58,8 +58,6 @@ def run_mpc_episode(model: WorldModel, env, goal_obs: torch.Tensor,
 
     Returns: list of (H, W, 3) uint8 numpy arrays — RGB frames for GIF
     """
-    from src.env import get_obs
-
     obs_raw, _ = env.reset()
     obs    = torch.tensor(get_obs(obs_raw, cfg.env_id))
     frames = [env.render()]
