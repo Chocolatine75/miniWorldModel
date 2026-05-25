@@ -3,7 +3,14 @@ __pycache__/
 *.pt
 *.pth
 checkpoints/
-data/rollouts.pt
-assets/demo.gif
+data/
 .env
 wandb/
+
+# Windows/WSL metadata
+*:Zone.Identifier
+
+# Internal planning docs
+CONTEXT.md
+HANDOFF.md
+.python-version
