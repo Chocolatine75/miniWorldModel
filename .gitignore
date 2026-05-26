@@ -1,8 +1,8 @@
 __pycache__/
 *.pyc
-*.pt
 *.pth
-checkpoints/
+checkpoints/*
+!checkpoints/model_ep020.pt
 data/
 .env
 wandb/
@@ -14,3 +14,6 @@ wandb/
 CONTEXT.md
 HANDOFF.md
 .python-version
+
+# Brainstorming session files
+.superpowers/
