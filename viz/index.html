@@ -20,7 +20,12 @@
 <script type="module">
 import * as THREE from 'three';
 
-const { frames } = await fetch('./trajectory.json').then(r => r.json());
+const { frames } = await fetch('./trajectory.json')
+  .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+  .catch(err => {
+    document.body.innerHTML = `<pre style="color:#f66;padding:2rem;font-family:monospace">Could not load trajectory.json\n\nRun first:\n  python -m src.plan --export-viz\n\n${err}</pre>`;
+    throw err;
+  });
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -36,7 +41,6 @@ scene.fog = new THREE.Fog(0x0a0a0f, 12, 20);
 // Camera
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.5, 7);
-camera.lookAt(0, 1, 0);
 
 // Lights
 scene.add(new THREE.AmbientLight(0x334466, 1.0));
@@ -45,11 +49,9 @@ dirLight.position.set(4, 8, 4);
 scene.add(dirLight);
 
 // Rail
-scene.add(Object.assign(
-  new THREE.Mesh(
-    new THREE.BoxGeometry(7, 0.06, 0.18),
-    new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.9, roughness: 0.2 })
-  )
+scene.add(new THREE.Mesh(
+  new THREE.BoxGeometry(7, 0.06, 0.18),
+  new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.9, roughness: 0.2 })
 ));
 
 // Subtle floor grid
@@ -93,11 +95,11 @@ polePivot.add(tipGlow);
 const TRAIL = 15;
 const trailMeshes = Array.from({ length: TRAIL }, (_, i) => {
   const m = new THREE.Mesh(
-    new THREE.SphereGeometry(0.018 + 0.016 * i / TRAIL, 6, 6),
+    new THREE.SphereGeometry(0.034 - 0.016 * i / TRAIL, 6, 6),
     new THREE.MeshBasicMaterial({
       color: 0x4466ff,
       transparent: true,
-      opacity: 0.06 + 0.55 * i / TRAIL,
+      opacity: 0.61 - 0.55 * i / TRAIL,
     })
   );
   scene.add(m);
