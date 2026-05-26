@@ -10,10 +10,12 @@ wandb/
 # Windows/WSL metadata
 *:Zone.Identifier
 
-# Internal planning docs
+# Internal / tooling
 CONTEXT.md
 HANDOFF.md
 .python-version
-
-# Brainstorming session files
 .superpowers/
+.claude/
+docs/superpowers/
+loss_curves.png
+*.mp4
