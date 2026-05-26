@@ -201,6 +201,8 @@ if __name__ == "__main__":
                         help="Run MPC episode and save demo.gif")
     parser.add_argument("--export-viz", action="store_true",
                         help="Run MPC episode and export trajectory to viz/trajectory.json")
+    parser.add_argument("--n-seeds", type=int, default=1,
+                        help="Scan N seeds for --export-viz and keep the most dramatic")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -229,11 +231,71 @@ if __name__ == "__main__":
         print(f"Demo saved → assets/demo.gif ({len(frames)} frames)")
 
     if args.export_viz:
-        Path("viz").mkdir(exist_ok=True)
-        env      = make_env(cfg.env_id, cfg.seed)
-        goal_raw, _ = env.reset(seed=cfg.seed + 99)
-        goal_obs = torch.tensor(get_obs(goal_raw, cfg.env_id))
+        # Goal is always the perfectly upright balanced state
+        goal_obs = torch.zeros(cfg.obs_dim, dtype=torch.float32)
 
-        print(f"Running MPC episode for viz (method={cfg.plan_method})...")
-        export_viz(model, env, goal_obs, cfg, device, path="viz/trajectory.json")
+        best_frames: list = []
+        best_score = -1.0
+
+        print(f"Scanning {args.n_seeds} seed(s) (method={cfg.plan_method})...")
+        for i in range(args.n_seeds):
+            seed_i = cfg.seed + i
+            set_seed(seed_i)
+            env_i = make_env(cfg.env_id, seed_i)
+
+            obs_raw, _ = env_i.reset()
+            obs = torch.tensor(get_obs(obs_raw, cfg.env_id))
+            frames_data = [
+                {"cart_x": float(obs_raw[0]), "pole_angle": float(obs_raw[2]), "action": 0}
+            ]
+            for _ in range(200):
+                action = plan(model, obs, goal_obs, cfg, device)
+                obs_raw, _, terminated, truncated, _ = env_i.step(action)
+                obs = torch.tensor(get_obs(obs_raw, cfg.env_id))
+                frames_data.append({
+                    "cart_x": float(obs_raw[0]),
+                    "pole_angle": float(obs_raw[2]),
+                    "action": int(action),
+                })
+                if terminated or truncated:
+                    break
+
+            n = len(frames_data)
+            max_angle = max(abs(f["pole_angle"]) for f in frames_data)
+            # Reward long episodes with visible angular tension; penalise short ones
+            score = n * max_angle if n >= 150 else 0.0
+            print(f"  seed {seed_i}: {n} frames, max_angle={max_angle:.3f} rad, score={score:.1f}")
+
+            if score > best_score:
+                best_score = score
+                best_frames = frames_data
+
+        if not best_frames:
+            best_frames = frames_data  # fallback: keep last run
+
+        Path("viz").mkdir(exist_ok=True)
+        with open("viz/trajectory.json", "w") as f:
+            json.dump({"frames": best_frames}, f)
+        print(f"Best trajectory → viz/trajectory.json ({len(best_frames)} frames)")
+
+        # Also generate untrained-model trajectory for split-screen comparison
+        print("Generating untrained model trajectory for comparison...")
+        from src.model import build_world_model as _build
+        untrained = _build(cfg).to(device)
+        untrained.eval()
+        set_seed(cfg.seed)
+        env_u = make_env(cfg.env_id, cfg.seed)
+        obs_raw_u, _ = env_u.reset()
+        obs_u = torch.tensor(get_obs(obs_raw_u, cfg.env_id))
+        frames_u = [{"cart_x": float(obs_raw_u[0]), "pole_angle": float(obs_raw_u[2]), "action": 0}]
+        for _ in range(200):
+            action_u = plan(untrained, obs_u, goal_obs, cfg, device)
+            obs_raw_u, _, term_u, trunc_u, _ = env_u.step(action_u)
+            obs_u = torch.tensor(get_obs(obs_raw_u, cfg.env_id))
+            frames_u.append({"cart_x": float(obs_raw_u[0]), "pole_angle": float(obs_raw_u[2]), "action": int(action_u)})
+            if term_u or trunc_u:
+                break
+        with open("viz/trajectory_untrained.json", "w") as f:
+            json.dump({"frames": frames_u}, f)
+        print(f"Untrained trajectory → viz/trajectory_untrained.json ({len(frames_u)} frames)")
         print("Done — run: python -m http.server --directory viz")

@@ -27,8 +27,8 @@ gamma: 1.0   # idm_loss weight
 
 # Planner
 plan_method: "cem"   # "cem" or "mppi"
-N: 512               # Number of candidate action sequences
-H: 15                # Planning horizon (timesteps)
-K: 64                # Number of elite sequences kept each iteration
-n_iter: 5            # CEM/MPPI refinement iterations
+N: 1024              # Number of candidate action sequences
+H: 20                # Planning horizon (timesteps)
+K: 128               # Number of elite sequences kept each iteration
+n_iter: 10           # CEM/MPPI refinement iterations
 mppi_lambda: 10.0    # MPPI softmax temperature

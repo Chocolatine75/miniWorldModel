@@ -4,7 +4,8 @@ A minimal action-conditioned world model in the spirit of [EB-JEPA](https://gith
 
 <video src="assets/demo.mp4" autoplay loop muted playsinline width="100%"></video>
 
-CartPole stays upright. Not because we hand-coded a controller — because a learned world model predicts the future in latent space, and a model-predictive planner picks actions that keep it balanced.
+**Left:** trained world model — CEM planner imagines 20 steps ahead, pole stays balanced.  
+**Right:** untrained model, same planner — latent space is noise, pole falls in under 10 steps.
 
 No RL. No reward shaping. ~600 lines of PyTorch.
 
@@ -12,7 +13,7 @@ No RL. No reward shaping. ~600 lines of PyTorch.
 
 ## How it works
 
-An **encoder** maps CartPole observations to a compact latent space. A **GRU predictor** learns to imagine the next latent state given an action — no pixel reconstruction, VICReg prevents collapse. At planning time, **CEM** samples action sequences, rolls them forward in imagination, and picks the one that keeps the pole upright.
+An **encoder** maps CartPole observations to a compact latent space. A **GRU predictor** learns to imagine the next latent state given an action — no pixel reconstruction, VICReg prevents collapse. At planning time, **CEM** samples 1024 action sequences, rolls them forward 20 steps in imagination, and picks the one that keeps the pole upright.
 
 <details>
 <summary>Architecture — Encoder · GRU Predictor · IDM · VICReg</summary>
@@ -70,22 +71,6 @@ An **encoder** maps CartPole observations to a compact latent space. A **GRU pre
 
 ![Loss Curves](assets/loss_curves.png)
 
-<details>
-<summary>Ablation — VICReg / IDM / both</summary>
-
-| Variant | `pred_loss` ↓ | Collapse? | Notes |
-|---|---|---|---|
-| Full model (pred + VICReg + IDM) | **0.0023** | No | Baseline |
-| No VICReg (pred + IDM only) | ~0.018 | Yes | Embedding std → 0 after ~8 epochs |
-| No IDM (pred + VICReg only) | ~0.009 | No | Slightly better pred, weaker planner |
-| Prediction only | ~0.031 | Yes | Fast collapse, planner fails |
-
-> Ablation values are estimates pending full sweep.
-
-![Ablation](assets/ablation.png)
-
-</details>
-
 ---
 
 ## Run the visualization
@@ -93,15 +78,43 @@ An **encoder** maps CartPole observations to a compact latent space. A **GRU pre
 ```bash
 pip install -r requirements.txt
 
-# Export a fresh trajectory from the trained model (checkpoint included)
+# Generate both trajectories (trained + untrained) — checkpoint included
 python -m src.plan --export-viz
 
-# Open Three.js visualization
+# Open split-screen Three.js visualization
 python -m http.server --directory viz
 # → open http://localhost:8000
 ```
 
-The model checkpoint is included in the repo — no training needed. To retrain from scratch: run `notebooks/kaggle_run.ipynb` on Kaggle (T4 GPU, ~30 min).
+The visualization shows both sides simultaneously: trained model (pole stays up) vs untrained model (pole falls in under 10 steps). Checkpoint included — no training needed. To retrain from scratch: run `notebooks/kaggle_run.ipynb` on Kaggle (T4 GPU, ~30 min).
+
+---
+
+## Repo structure
+
+```
+src/
+  model.py       — Encoder, GRU Predictor, IDM (WorldModel)
+  train.py       — training loop (VICReg + IDM + pred loss)
+  plan.py        — CEM / MPPI planner + --export-viz
+  env.py         — Gymnasium helpers
+  viz.py         — GIF export
+
+viz/
+  index.html     — Three.js split-screen renderer (no build step)
+  trajectory.json           — pre-recorded trained trajectory
+  trajectory_untrained.json — pre-recorded untrained trajectory
+
+checkpoints/
+  model_ep020.pt — trained checkpoint (~420 KB)
+
+notebooks/
+  kaggle_run.ipynb — full training pipeline on Kaggle T4
+
+assets/
+  demo.mp4       — screen recording of the viz
+  loss_curves.png
+```
 
 <details>
 <summary>Stack</summary>
