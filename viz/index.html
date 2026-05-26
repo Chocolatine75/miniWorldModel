@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Mini World Model — CartPole</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const { frames } = await fetch('./trajectory.json').then(r => r.json());
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0f);
+scene.fog = new THREE.Fog(0x0a0a0f, 12, 20);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.5, 7);
+camera.lookAt(0, 1, 0);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x334466, 1.0));
+const dirLight = new THREE.DirectionalLight(0x8899ff, 2.0);
+dirLight.position.set(4, 8, 4);
+scene.add(dirLight);
+
+// Rail
+scene.add(Object.assign(
+  new THREE.Mesh(
+    new THREE.BoxGeometry(7, 0.06, 0.18),
+    new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.9, roughness: 0.2 })
+  )
+));
+
+// Subtle floor grid
+const grid = new THREE.GridHelper(10, 20, 0x112233, 0x112233);
+grid.position.y = -0.04;
+scene.add(grid);
+
+// Cart
+const cart = new THREE.Mesh(
+  new THREE.BoxGeometry(0.55, 0.22, 0.38),
+  new THREE.MeshStandardMaterial({ color: 0x3a6fcc, metalness: 0.6, roughness: 0.3 })
+);
+cart.position.y = 0.14;
+scene.add(cart);
+
+// Pole pivot — rotates at base of pole (top of cart)
+const polePivot = new THREE.Object3D();
+polePivot.position.set(0, 0.28, 0);
+scene.add(polePivot);
+
+const POLE_LEN = 1.3;
+const pole = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.028, 0.038, POLE_LEN, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0xddeeff,
+    emissive: 0x4455cc,
+    emissiveIntensity: 0.5,
+    metalness: 0.4,
+    roughness: 0.4,
+  })
+);
+pole.position.y = POLE_LEN / 2;
+polePivot.add(pole);
+
+// Glowing tip
+const tipGlow = new THREE.PointLight(0x6688ff, 2.0, 2.5);
+tipGlow.position.y = POLE_LEN;
+polePivot.add(tipGlow);
+
+// Motion trail — 15 spheres, fading in opacity and growing in size
+const TRAIL = 15;
+const trailMeshes = Array.from({ length: TRAIL }, (_, i) => {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(0.018 + 0.016 * i / TRAIL, 6, 6),
+    new THREE.MeshBasicMaterial({
+      color: 0x4466ff,
+      transparent: true,
+      opacity: 0.06 + 0.55 * i / TRAIL,
+    })
+  );
+  scene.add(m);
+  return m;
+});
+
+const SCALE = 2.6 / 2.4;   // CartPole x ∈ [-2.4, 2.4] → world units
+const MS_PER_FRAME = 1000 / 30;
+const tmpVec = new THREE.Vector3();
+let fi = 0, lastT = 0;
+
+function animate(t) {
+  requestAnimationFrame(animate);
+  if (t - lastT < MS_PER_FRAME) { renderer.render(scene, camera); return; }
+  lastT = t;
+
+  const { cart_x, pole_angle } = frames[fi % frames.length];
+  fi++;
+
+  const wx = cart_x * SCALE;
+
+  cart.position.x = wx;
+  polePivot.position.x = wx;
+  polePivot.rotation.z = -pole_angle;   // positive angle = tilt right = -Z rotation
+
+  // Camera follows cart with soft lag
+  camera.position.x += (wx * 0.35 - camera.position.x) * 0.06;
+
+  // Shift trail back and place newest at tip position
+  tipGlow.getWorldPosition(tmpVec);
+  for (let i = TRAIL - 1; i > 0; i--) {
+    trailMeshes[i].position.copy(trailMeshes[i - 1].position);
+  }
+  trailMeshes[0].position.copy(tmpVec);
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
