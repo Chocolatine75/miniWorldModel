@@ -2,7 +2,7 @@
 
 Hackathon project (HackTheWorld(s), May 2026) — action-conditioned world model + CEM planner on CartPole, inspired by [EB-JEPA](https://github.com/facebookresearch/eb_jepa).
 
-![demo](assets/demo.gif)
+[![demo](assets/demo.gif)](assets/demo.mp4)
 
 Left: trained model, the pole stays up for 200 steps. Right: same architecture, untrained — the planner is blind, pole falls in under 10 steps.
 
