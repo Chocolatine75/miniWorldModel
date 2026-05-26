@@ -125,6 +125,7 @@ function animate(t) {
 
   // Camera follows cart with soft lag
   camera.position.x += (wx * 0.35 - camera.position.x) * 0.06;
+  camera.lookAt(wx * 0.2, 1, 0);
 
   // Shift trail back and place newest at tip position
   tipGlow.getWorldPosition(tmpVec);
