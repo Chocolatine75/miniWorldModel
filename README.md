@@ -1,28 +1,21 @@
 # Mini World Model — AC-JEPA on CartPole
 
-> A minimal action-conditioned world model in the spirit of [EB-JEPA](https://github.com/facebookresearch/eb_jepa) (Meta FAIR / Yann LeCun).
-> Built for **HackTheWorld(s)** — May 2026.
+A minimal action-conditioned world model in the spirit of [EB-JEPA](https://github.com/facebookresearch/eb_jepa) (Meta FAIR / Yann LeCun) — built for HackTheWorld(s), May 2026.
 
-CartPole stays upright. Not because we hand-coded a controller — because a **learned world model** predicts the future in latent space, and a **model-predictive planner** picks actions that keep it balanced.
+<video src="assets/demo.mp4" autoplay loop muted playsinline width="100%"></video>
 
-![Demo](assets/demo.gif)
+CartPole stays upright. Not because we hand-coded a controller — because a learned world model predicts the future in latent space, and a model-predictive planner picks actions that keep it balanced.
 
----
-
-## Why this matters
-
-Yann LeCun's bet on JEPA-style world models is that intelligence emerges from **predicting structure in latent space**, not pixels. This project is a minimal, self-contained proof that the idea works end-to-end:
-
-- Train an encoder + GRU predictor with **no reconstruction loss** — pure latent prediction.
-- Prevent representation collapse with **VICReg** (variance + covariance regularization).
-- Inject action grounding via an **Inverse Dynamics Model** (IDM).
-- Freeze the world model, run **CEM** or **MPPI** over imagined rollouts → CartPole holds for 150+ frames.
-
-Total codebase: ~600 lines of PyTorch. No RL. No reward shaping. Just prediction.
+No RL. No reward shaping. ~600 lines of PyTorch.
 
 ---
 
-## Architecture
+## How it works
+
+An **encoder** maps CartPole observations to a compact latent space. A **GRU predictor** learns to imagine the next latent state given an action — no pixel reconstruction, VICReg prevents collapse. At planning time, **CEM** samples action sequences, rolls them forward in imagination, and picks the one that keeps the pole upright.
+
+<details>
+<summary>Architecture — Encoder · GRU Predictor · IDM · VICReg</summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -52,38 +45,33 @@ Total codebase: ~600 lines of PyTorch. No RL. No reward shaping. Just prediction
 └─────────────────────────────────────────────────────────────────┘
 ```
 
----
+**Encoder** — two-layer MLP, obs → 32-dim embedding. No reconstruction loss.
 
-## Losses
+**GRU Predictor** — takes (z_t, action_onehot), returns ẑ_{t+1}. Trained with MSE against the stop-gradient target z_{t+1}.
 
-| Loss | Formula | Role |
-|---|---|---|
-| Prediction | `MSE(ẑ_{t+1}, sg(z_{t+1}))` | Learn to predict future latent state |
-| Variance | `mean(max(0, 1 − std(z)))` | Prevent collapse to a constant embedding |
-| Covariance | `sum(off_diag(cov(z))²) / d` | Decorrelate embedding dimensions |
-| IDM | `CrossEntropy(MLP(z_t, z_{t+1}), a_t)` | Ground representations in action-relevant info |
+**VICReg** — variance + covariance regularization on the embeddings. Prevents the encoder from collapsing to a constant output.
 
-**Total loss:** `L = pred_loss + α · var_loss + β · cov_loss + γ · idm_loss`
+**IDM (Inverse Dynamics Model)** — MLP that predicts the action taken from (z_t, z_{t+1}). Grounds representations in action-relevant information. Used only at training time.
 
-Default coefficients: `α = 1.0`, `β = 0.04`, `γ = 0.1`
+</details>
 
 ---
 
 ## Results
 
-Training on CartPole-v1 for 20 epochs on a Kaggle T4 GPU (~30 min):
+20 epochs on CartPole-v1, Kaggle T4 GPU (~30 min).
 
 | Metric | Epoch 1 | Epoch 20 | Change |
 |---|---|---|---|
-| `pred_loss` | 0.0175 | 0.0023 | **7.6× improvement** |
-| `idm_loss` | 0.51 | ~0.000 | Near-perfect action grounding (3 epochs) |
-| `var_loss` | 0.80 | 0.57 | Stable — no collapse |
-| `cov_loss` | ~0.110 | ~0.083 | Normal VICReg oscillation |
-| Collapse warnings | — | — | **None detected** |
+| `pred_loss` | 0.0175 | 0.0023 | 7.6× |
+| `idm_loss` | 0.51 | ~0.000 | near-perfect after 3 epochs |
+| `var_loss` | 0.80 | 0.57 | stable — no collapse |
+| `cov_loss` | ~0.110 | ~0.083 | normal VICReg oscillation |
 
 ![Loss Curves](assets/loss_curves.png)
 
-### Ablation (CartPole, 20 epochs)
+<details>
+<summary>Ablation — VICReg / IDM / both</summary>
 
 | Variant | `pred_loss` ↓ | Collapse? | Notes |
 |---|---|---|---|
@@ -92,69 +80,43 @@ Training on CartPole-v1 for 20 epochs on a Kaggle T4 GPU (~30 min):
 | No IDM (pred + VICReg only) | ~0.009 | No | Slightly better pred, weaker planner |
 | Prediction only | ~0.031 | Yes | Fast collapse, planner fails |
 
-> Ablation values are estimates pending full sweep — will be updated before submission.
+> Ablation values are estimates pending full sweep.
+
+![Ablation](assets/ablation.png)
+
+</details>
 
 ---
 
-## Planners
-
-Both planners operate on **imagined rollouts** in latent space using the frozen world model. No environment interaction during planning.
-
-**CEM — Cross-Entropy Method**
-Iteratively refine a distribution over action sequences by resampling from the top-k (elite) trajectories. Fast convergence, 3–5 iterations per step.
-
-**MPPI — Model Predictive Path Integral**
-Sample trajectories, weight by `softmax(-cost / λ)`, compute weighted mean. Smoother than CEM, better in noisy settings.
-
----
-
-## How to run
-
-### On Kaggle (recommended — T4 GPU, ~30 min)
-
-1. Open `notebooks/kaggle_run.ipynb` on [Kaggle](https://www.kaggle.com/)
-2. Set Accelerator → **GPU T4 x1**
-3. Run all 6 cells in order:
-   - Cell 1: clone repo + install deps
-   - Cell 2: generate CartPole dataset
-   - Cell 3: train world model (20 epochs)
-   - Cell 4: plot loss curves
-   - Cell 5: run CEM planner + record demo GIF
-   - Cell 6: smoke tests (shapes, losses, planner validity)
-
-### Locally
+## Run the visualization
 
 ```bash
-git clone https://github.com/Chocolatine75/miniWorldModel
-cd miniWorldModel
 pip install -r requirements.txt
 
-# Generate dataset
-python -m src.data --config config.yaml
+# Export a fresh trajectory from the trained model (checkpoint included)
+python -m src.plan --export-viz
 
-# Train world model
-python -m src.train --config config.yaml
-
-# Run planner and record demo
-python -m src.plan --config config.yaml --demo
+# Open Three.js visualization
+python -m http.server --directory viz
+# → open http://localhost:8000
 ```
 
-Requirements: Python 3.10+, PyTorch 2.x, Gymnasium, NumPy, Matplotlib, Pillow, PyYAML.
+The model checkpoint is included in the repo — no training needed. To retrain from scratch: run `notebooks/kaggle_run.ipynb` on Kaggle (T4 GPU, ~30 min).
 
----
-
-## Stack
+<details>
+<summary>Stack</summary>
 
 | Component | Library |
 |---|---|
 | World model | PyTorch |
 | Environment | Gymnasium (CartPole-v1) |
+| Visualization | Three.js |
 | Data / viz | NumPy, Matplotlib, Pillow |
 | Config | PyYAML |
 | Training infra | Kaggle (T4 GPU) |
 
----
+</details>
 
-## Repo
+---
 
 [github.com/Chocolatine75/miniWorldModel](https://github.com/Chocolatine75/miniWorldModel) — HackTheWorld(s) 2026
