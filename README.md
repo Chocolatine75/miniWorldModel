@@ -1,8 +1,8 @@
 # mini world model
 
-Hackathon project (HackTheWorld(s), May 2026) — action-conditioned world model + CEM planner on CartPole, inspired by [EB-JEPA](https://github.com/facebookresearch/eb_jepa).
+Minimal action-conditioned world model (AC-JEPA style) on CartPole — encoder + GRU predictor trained with VICReg, planned with CEM.
 
-[![demo](assets/demo.gif)](assets/demo.mp4)
+![demo](assets/demo.gif)
 
 Left: trained model, the pole stays up for 200 steps. Right: same architecture, untrained — the planner is blind, pole falls in under 10 steps.
 
@@ -10,9 +10,9 @@ No RL, no reward shaping, ~600 lines of PyTorch.
 
 ---
 
-## What it does
+## How it works
 
-The model learns to predict the future in latent space. At each timestep, CEM samples 1024 action sequences, rolls them forward 20 steps through the model, and picks the one that keeps the pole closest to upright. The "world model" is what makes the difference — without it, the planner is just guessing.
+The model learns to predict the future in latent space. At each timestep, CEM samples 1024 action sequences, rolls them forward 20 steps through the model, and picks the one that keeps the pole closest to upright. The world model is what makes the difference — without it, the planner is just guessing.
 
 <details>
 <summary>Architecture</summary>
@@ -32,7 +32,7 @@ PLANNING  (model frozen)
   z_0  →  [rollout 1024 sequences × 20 steps]  →  pick best first action
 ```
 
-VICReg keeps the embedding space from collapsing. IDM grounds it in action-relevant structure. The GRU predictor is the thing you actually use at planning time.
+VICReg keeps the embedding space from collapsing. IDM grounds it in action-relevant structure. The GRU predictor is what you use at planning time.
 
 </details>
 
@@ -52,7 +52,7 @@ Trained 20 epochs on Kaggle T4 (~30 min).
 
 ---
 
-## Run it
+## Run the demo
 
 ```bash
 pip install -r requirements.txt
@@ -60,12 +60,12 @@ pip install -r requirements.txt
 # generates viz/trajectory.json (trained) + viz/trajectory_untrained.json
 python -m src.plan --export-viz
 
-# open the split-screen viz
+# launch the Three.js split-screen viz
 python -m http.server --directory viz
-# → http://localhost:8000
+# → open http://localhost:8000
 ```
 
-Checkpoint is in the repo, no training needed. To retrain: `notebooks/kaggle_run.ipynb` on Kaggle.
+Checkpoint included (`checkpoints/model_ep020.pt`), no training needed. To retrain: `notebooks/kaggle_run.ipynb` on Kaggle.
 
 ---
 
@@ -79,6 +79,14 @@ notebooks/    kaggle_run.ipynb
 assets/       demo.gif, loss_curves.png
 ```
 
----
+<details>
+<summary>Stack</summary>
 
-[github.com/Chocolatine75/miniWorldModel](https://github.com/Chocolatine75/miniWorldModel)
+| Component | Library |
+|---|---|
+| World model | PyTorch |
+| Environment | Gymnasium (CartPole-v1) |
+| Visualization | Three.js |
+| Config | PyYAML |
+
+</details>
