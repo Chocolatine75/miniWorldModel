@@ -5,6 +5,7 @@ Saves: assets/demo.gif
 """
 
 import argparse
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import List
@@ -71,6 +72,43 @@ def run_mpc_episode(model: WorldModel, env, goal_obs: torch.Tensor,
             break
 
     return frames
+
+
+def export_viz(model: WorldModel, env, goal_obs: torch.Tensor,
+               cfg: SimpleNamespace, device: str,
+               path: str = "viz/trajectory.json",
+               max_steps: int = 200) -> None:
+    """Run one MPC episode and write CartPole states to JSON for the Three.js viz.
+
+    path:      output JSON file — parent directories are created if missing
+    max_steps: episode length cap
+
+    JSON schema: {"frames": [{"cart_x": float, "pole_angle": float, "action": int}, ...]}
+    CartPole obs layout: [cart_x, cart_vel, pole_angle, pole_ang_vel]
+    """
+    obs_raw, _ = env.reset()
+    obs = torch.tensor(get_obs(obs_raw, cfg.env_id))
+
+    frames_data = [
+        {"cart_x": float(obs_raw[0]), "pole_angle": float(obs_raw[2]), "action": 0}
+    ]
+
+    for _ in range(max_steps):
+        action = plan(model, obs, goal_obs, cfg, device)
+        obs_raw, _, terminated, truncated, _ = env.step(action)
+        obs = torch.tensor(get_obs(obs_raw, cfg.env_id))
+        frames_data.append({
+            "cart_x": float(obs_raw[0]),
+            "pole_angle": float(obs_raw[2]),
+            "action": int(action),
+        })
+        if terminated or truncated:
+            break
+
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"frames": frames_data}, f)
+    print(f"Trajectory exported → {path} ({len(frames_data)} frames)")
 
 
 # --------------------------------------------------------------------------- #
@@ -161,6 +199,8 @@ if __name__ == "__main__":
                         help="Path to checkpoint .pt file. Defaults to last epoch.")
     parser.add_argument("--demo",       action="store_true",
                         help="Run MPC episode and save demo.gif")
+    parser.add_argument("--export-viz", action="store_true",
+                        help="Run MPC episode and export trajectory to viz/trajectory.json")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -187,3 +227,13 @@ if __name__ == "__main__":
         frames = run_mpc_episode(model, env, goal_obs, cfg, device)
         make_demo_gif(frames, "assets/demo.gif")
         print(f"Demo saved → assets/demo.gif ({len(frames)} frames)")
+
+    if args.export_viz:
+        Path("viz").mkdir(exist_ok=True)
+        env      = make_env(cfg.env_id, cfg.seed)
+        goal_raw, _ = env.reset(seed=cfg.seed + 99)
+        goal_obs = torch.tensor(get_obs(goal_raw, cfg.env_id))
+
+        print(f"Running MPC episode for viz (method={cfg.plan_method})...")
+        export_viz(model, env, goal_obs, cfg, device, path="viz/trajectory.json")
+        print("Done — run: python -m http.server --directory viz")

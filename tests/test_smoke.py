@@ -3,6 +3,10 @@
 Run: pytest tests/test_smoke.py -v
 """
 
+import json
+import numpy as np
+from pathlib import Path
+
 import torch
 import pytest
 from types import SimpleNamespace
@@ -132,3 +136,36 @@ def test_two_epoch_training_loss_decreases():
 
     assert all(torch.isfinite(torch.tensor(l)) for l in epoch_losses), \
         f"Non-finite loss: {epoch_losses}"
+
+
+def test_export_viz_creates_valid_json(tmp_path):
+    """export_viz writes JSON with frames containing cart_x, pole_angle, action."""
+    from src.plan import export_viz
+    from src.model import build_world_model
+    from unittest.mock import MagicMock
+
+    cfg = _make_cfg()
+    device = "cpu"
+    model = build_world_model(cfg)
+
+    obs_raw = np.array([0.01, 0.0, 0.02, 0.0], dtype=np.float32)
+    mock_env = MagicMock()
+    mock_env.reset.return_value = (obs_raw, {})
+    mock_env.step.return_value = (obs_raw, 0.0, False, False, {})
+
+    goal_obs = torch.zeros(cfg.obs_dim)
+    out_path = str(tmp_path / "trajectory.json")
+
+    export_viz(model, mock_env, goal_obs, cfg, device, path=out_path, max_steps=5)
+
+    assert Path(out_path).exists()
+    with open(out_path) as f:
+        data = json.load(f)
+
+    assert "frames" in data
+    assert len(data["frames"]) == 6  # initial frame + 5 steps
+    for frame in data["frames"]:
+        assert set(frame.keys()) == {"cart_x", "pole_angle", "action"}
+        assert isinstance(frame["cart_x"], float)
+        assert isinstance(frame["pole_angle"], float)
+        assert isinstance(frame["action"], int)
